@@ -28,7 +28,7 @@ public class AStar {
         return totalPath;
     }
 
-    public List<State> search(String agentName) {
+    public List<State> search(String agentName, Constraints constraints) {
         State initialState = agentDict.get(agentName).get("start");
         int stepCost = 1;
 
@@ -43,6 +43,8 @@ public class AStar {
 
         Map<State, Integer> fScore = new HashMap<>();
         fScore.put(initialState, env.admissibleHeuristic(initialState, agentName));
+
+        int maxTime = 100; // TODO: 최대 시간 설정 추후 변경 필요
 
         while (!openSet.isEmpty()) {
             State current = null;
@@ -62,7 +64,12 @@ public class AStar {
             openSet.remove(current);
             closedSet.add(current);
 
-            List<State> neighborList = env.getNeighbors(current);
+            // 현재 시간이 최대 시간을 초과하면 탐색 중지
+            if (current.time >= maxTime) {
+                continue;
+            }
+
+            List<State> neighborList = env.getNeighbors(current, agentName, constraints);
 
             for (State neighbor : neighborList) {
                 if (closedSet.contains(neighbor)) {

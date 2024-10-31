@@ -33,10 +33,9 @@ public class CbsApplication {
 		agents.add(agent1);
 		agents.add(agent2);
 
-		int[] dimension = {10, 10};
 		Set<Location> obstacles = new HashSet<>();
 
-		Environment env = new Environment(dimension, agents, obstacles);
+		Environment env = new Environment(agents, obstacles);
 		CBS cbs = new CBS(env);
 		Map<String, List<State>> solution = cbs.search();
 

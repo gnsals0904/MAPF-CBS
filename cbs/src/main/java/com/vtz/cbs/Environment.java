@@ -8,49 +8,62 @@ import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
 
+@Getter
 public class Environment {
-    private final int[] dimension;
+    private final int[] dimension = {9, 9};;
     private final Set<Location> obstacles;
     private final List<Map<String, Object>> agents;
-    @Getter
     private Map<String, Map<String, State>> agentDict;
-    private Constraints constraints;
     @Setter
     private Map<String, Constraints> constraintDict;
     private final AStar aStar;
+    private int globalTime;
+    private Map<String, List<State>> latestSolution;
 
-    public Environment(int[] dimension, List<Map<String, Object>> agents, Set<Location> obstacles) {
-        this.dimension = dimension;
+    public Environment(List<Map<String, Object>> agents, Set<Location> obstacles) {
         this.obstacles = obstacles;
         this.agents = agents;
         this.agentDict = new HashMap<>();
-        this.constraints = new Constraints();
         this.constraintDict = new HashMap<>();
         makeAgentDict();
         this.aStar = new AStar(this);
+        this.globalTime = 0;
+        this.latestSolution = new HashMap<>();
     }
 
-    public List<State> getNeighbors(State state) {
+    public List<State> getNeighbors(State state, String agentName, Constraints constraints) {
         List<State> neighbors = new ArrayList<>();
         int currentTime = state.time;
+        int maxTime = 100;
+        int[][] moves = {{0, 1}, {0, -1}, {-1, 0}, {1, 0}};
 
-        State waitState = new State(currentTime + 1, state.location);
-        if (stateValid(waitState)) {
-            neighbors.add(waitState);
+        if (currentTime >= maxTime) {
+            return neighbors; // 무한루프처리
         }
 
-        int[][] moves = {{0, 1}, {0, -1}, {-1, 0}, {1, 0}};
         for (int[] move : moves) {
+            // x=8 동서 방향 이동 막기
+            if (state.location.x == 8 && move[0] != 0) {
+                continue;
+            }
+
             Location newLocation = new Location(state.location.x + move[0], state.location.y + move[1]);
             State newState = new State(currentTime + 1, newLocation);
-            if (stateValid(newState) && transitionValid(state, newState)) {
+            if (stateValid(newState, agentName, constraints) && transitionValid(state, newState, agentName, constraints)) {
                 neighbors.add(newState);
             }
         }
+
+        // 대기 액션
+        State waitState = new State(currentTime + 1, state.location);
+        if (stateValid(waitState, agentName, constraints)) {
+            neighbors.add(waitState);
+        }
+
         return neighbors;
     }
 
-    public boolean stateValid(State state) {
+    public boolean stateValid(State state, String agentName, Constraints constraints) {
         if (state.location.x < 0 || state.location.x >= dimension[0] ||
                 state.location.y < 0 || state.location.y >= dimension[1]) {
             return false;
@@ -64,10 +77,11 @@ public class Environment {
         return !constraints.vertexConstraints.contains(vc);
     }
 
-    public boolean transitionValid(State state1, State state2) {
+    public boolean transitionValid(State state1, State state2, String agentName, Constraints constraints) {
         EdgeConstraint ec = new EdgeConstraint(state1.time, state1.location, state2.location);
         return !constraints.edgeConstraints.contains(ec);
     }
+
 
     public int admissibleHeuristic(State state, String agentName) {
         State goal = agentDict.get(agentName).get("goal");
@@ -100,8 +114,8 @@ public class Environment {
     public Map<String, List<State>> computeSolution() {
         Map<String, List<State>> solution = new HashMap<>();
         for (String agent : agentDict.keySet()) {
-            this.constraints = this.constraintDict.getOrDefault(agent, new Constraints());
-            List<State> localSolution = aStar.search(agent);
+            Constraints agentConstraints = constraintDict.getOrDefault(agent, new Constraints());
+            List<State> localSolution = aStar.search(agent, agentConstraints);
             if (localSolution == null) {
                 return null;
             }
@@ -161,7 +175,7 @@ public class Environment {
                 }
             }
         }
-        return null; // 충돌이 없음
+        return null; // 충돌이 없는 상황
     }
 
     public State getState(String agentName, Map<String, List<State>> solution, int time) {
@@ -211,6 +225,76 @@ public class Environment {
         return constraintDict;
     }
 
+    public void incrementGlobalTime() {
+        this.globalTime++;
+    }
+
+    public void addAgent(Map<String, Object> agentInfo) {
+        String name = (String) agentInfo.get("name");
+        List<Integer> startCoords = (List<Integer>) agentInfo.get("start");
+        List<Integer> goalCoords = (List<Integer>) agentInfo.get("goal");
+        int startTime = this.globalTime; // 현재 글로벌 시간을 시작 시간으로 설정
+
+        State startState = new State(startTime, new Location(startCoords.get(0), startCoords.get(1)));
+        State goalState = new State(0, new Location(goalCoords.get(0), goalCoords.get(1)));
+
+        Map<String, State> stateMap = new HashMap<>();
+        stateMap.put("start", startState);
+        stateMap.put("goal", goalState);
+
+        agentDict.put(name, stateMap);
+        Constraints newConstraints = new Constraints();
+        constraintDict.put(name, newConstraints);
+    }
+
+    public void addExistingAgentConstraints(String newAgentName) {
+        Constraints newAgentConstraints = constraintDict.get(newAgentName);
+        for (String agentName : agentDict.keySet()) {
+            if (agentName.equals(newAgentName)) continue;
+
+            List<State> agentPath = latestSolution.get(agentName);
+            if (agentPath == null) continue;
+
+            for (State state : agentPath) {
+                // Vertex Constraint 추가
+                VertexConstraint vc = new VertexConstraint(state.time, state.location);
+                newAgentConstraints.vertexConstraints.add(vc);
+            }
+
+            for (int i = 1; i < agentPath.size(); i++) {
+                State prevState = agentPath.get(i - 1);
+                State currState = agentPath.get(i);
+                // Edge Constraint 추가
+                EdgeConstraint ec = new EdgeConstraint(prevState.time, prevState.location, currState.location);
+                newAgentConstraints.edgeConstraints.add(ec);
+            }
+        }
+    }
+
+    public boolean computePathForNewAgent(String agentName) {
+        addExistingAgentConstraints(agentName);
+        Constraints agentConstraints = this.constraintDict.get(agentName);
+        List<State> path = aStar.search(agentName, agentConstraints);
+        if (path == null) {
+            return false; // 경로를 찾을 수 없음
+        }
+        latestSolution.put(agentName, path);
+        return true;
+    }
+
+    public void updateAgents() {
+        for (String agentName : agentDict.keySet()) {
+            List<State> path = latestSolution.get(agentName);
+            if (path == null) continue;
+
+            int timeIndex = globalTime - agentDict.get(agentName).get("start").time;
+            if (timeIndex >= 0 && timeIndex < path.size()) {
+                State currentState = path.get(timeIndex);
+                // 에이전트의 위치를 currentState.location으로 업데이트
+                // TODO : 실제 에이전트 이동 로직 적용
+            }
+        }
+    }
 
 
 }
