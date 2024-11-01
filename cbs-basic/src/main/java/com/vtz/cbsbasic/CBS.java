@@ -3,12 +3,12 @@ package com.vtz.cbsbasic;
 import java.util.*;
 
 public class CBS {
-    private Environment env;
+    private WareHouseEnvironment env;
     private Set<HighLevelNode> openSet;
     private Set<HighLevelNode> closedSet;
 
-    public CBS(Environment environment) {
-        this.env = environment;
+    public CBS(WareHouseEnvironment wareHouseEnvironment) {
+        this.env = wareHouseEnvironment;
         this.openSet = new HashSet<>();
         this.closedSet = new HashSet<>();
     }

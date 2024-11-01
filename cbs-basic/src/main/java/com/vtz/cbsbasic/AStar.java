@@ -4,11 +4,13 @@ import java.util.*;
 
 public class AStar {
     private Map<String, Map<String, Object>> agentDict;
-    private Environment env;
+    private WareHouseEnvironment env;
+    private GlobalClock globalClock;
 
-    public AStar(Environment env) {
+    public AStar(WareHouseEnvironment env) {
         this.env = env;
         this.agentDict = env.agentDict;
+        this.globalClock = env.globalClock;
     }
 
     public List<State> reconstructPath(Map<State, State> cameFrom, State current) {
@@ -59,6 +61,11 @@ public class AStar {
             List<State> neighborList = env.getNeighbors(current);
 
             for (State neighbor : neighborList) {
+
+                if (neighbor.time < initialState.time) {
+                    continue;
+                }
+
                 if (closedSet.contains(neighbor)) {
                     continue;
                 }

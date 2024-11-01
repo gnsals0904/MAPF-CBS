@@ -1,16 +1,22 @@
 package com.vtz.cbsbasic;
 
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.ToString;
 
+@Getter
+@Setter
 @ToString
+@NoArgsConstructor
 public class Location {
     public int x;
     public int y;
 
-    public Location() {
-        this.x = -1;
-        this.y = -1;
-    }
+//    public Location() {
+//        this.x = -1;
+//        this.y = -1;
+//    }
 
     public Location(int x, int y) {
         this.x = x;
